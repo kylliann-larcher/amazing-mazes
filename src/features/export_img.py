@@ -1,0 +1,1 @@
+# Conversion ASCII → PNG (bonus)

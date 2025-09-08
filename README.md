@@ -1,1 +1,1 @@
-# amazing-mazes-
+# Documentation du projet Amazing Mazes
