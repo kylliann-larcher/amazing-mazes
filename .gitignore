@@ -1,1 +1,23 @@
 # Fichiers/dossiers à ignorer (venv, __pycache__, data lourdes)
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+*.log
+
+# Environnements virtuels
+.venv/
+env/
+venv/
+
+# Données
+data/outputs/*
+!data/outputs/.gitkeep   # garder le dossier vide
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
