@@ -14,10 +14,16 @@ git clone https://github.com/votre-compte/amazing-mazes.git
 cd amazing-mazes
 
 python -m venv .venv
+
 # Linux/Mac
 source .venv/bin/activate
+
 # Windows
 .venv\Scripts\activate
+
+# PowerShell
+.\.venv\Scripts\Activate.ps1
+
 
 pip install -r requirements.txt 
 ```
