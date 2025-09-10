@@ -2,12 +2,14 @@ from __future__ import annotations
 from features.gen_backtrack import BacktrackingGenerator
 from features.solve_backtrack import BacktrackingSolver
 from utils import Maze
+from features.solve_astar import AStarSolver
 
 def cli():
     print("=== Amazing Mazes (POO) ===")
     print("1) Générer un labyrinthe (Backtracking)")
     print("2) Résoudre un labyrinthe (Backtracking)")
-    choice = input("Votre choix ? [1/2] ").strip()
+    print("3) Résoudre un labyrinthe (A*)")
+    choice = input("Votre choix ? [1/2/3] ").strip()
 
     if choice == "1":
         try:
@@ -36,6 +38,21 @@ def cli():
             return
 
         solver = BacktrackingSolver()
+        solved = solver.solve(maze)
+        solved.save_txt(out)
+        print(f"✅ Solution écrite: {out}")
+
+    elif choice == "3":
+        src = input("Fichier labyrinthe source (.txt) ? ").strip() or "data/outputs/maze_5.txt"
+        out = input("Fichier solution (.txt) ? ").strip() or "data/outputs/solution_astar.txt"
+        try:
+            maze = Maze.load_txt(src)
+        except FileNotFoundError as e:
+            print(f"⚠️  {e}")
+            print("Astuce: commence par générer un labyrinthe avec l'option 1.")
+            return
+
+        solver = AStarSolver()
         solved = solver.solve(maze)
         solved.save_txt(out)
         print(f"✅ Solution écrite: {out}")
