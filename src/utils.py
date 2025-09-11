@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import List
 import os
+from pathlib import Path
+from config import MAZES_DIR
 
 class Maze:
     """
@@ -38,19 +40,39 @@ class Maze:
     def ascii_width(self) -> int:
         return len(self.grid[0]) if self.grid else 0
 
-    def save_txt(self, filename: str) -> None:
-        #créer dossier si nécessaire
-        os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)
+    def save_txt(self, filename: str | None = None) -> str:
+        """
+        Sauvegarde la grille en .txt.
+        Si filename est None ou vide, on crée un fichier dans data/outputs/mazes.
+        Retourne le chemin complet du fichier sauvegardé (string).
+        """
+        # filename par défaut
+        if not filename:
+            filename = MAZES_DIR / "maze_auto.txt"
+        filename = Path(filename)
+        # si le chemin est relatif et n'a pas de dossier, l'interpréter dans MAZES_DIR
+        if filename.parent == Path("."):
+            filename = MAZES_DIR / filename.name
+
+        # créer dossier parent si besoin
+        filename.parent.mkdir(parents=True, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             for row in self.grid:
                 f.write("".join(row) + "\n")
+        return str(filename)
 
     @classmethod
+    
     def load_txt(cls, filename: str) -> "Maze":
-        if not os.path.exists(filename):
-            raise FileNotFoundError(f"Fichier introuvable: {filename}. "
-                "Assure-toi d'avoir généré un labyrinthe (option 1) ou de donner un chemin valide.")
-        with open(filename, "r", encoding="utf-8") as f:
+        path = Path(filename)
+        # accepter les chemins simples (nom de fichier) en cherchant dans MAZES_DIR
+        if not path.exists():
+            alt = MAZES_DIR / path.name
+            if alt.exists():
+                path = alt
+        if not path.exists():
+            raise FileNotFoundError(f"Fichier introuvable: {filename}")
+        with open(path, "r", encoding="utf-8") as f:
             lines = [list(line.rstrip("\n")) for line in f]
         return cls(lines)
 
