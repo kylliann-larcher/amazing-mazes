@@ -6,7 +6,7 @@ from features.gen_backtrack import BacktrackingGenerator
 from features.solve_backtrack import BacktrackingSolver
 from features.solve_astar import AStarSolver
 from features.export_img import AsciiExporter
-from utils import Maze
+from utils import Maze, resolve_maze_file
 import sys
 
 def ask_input_int(prompt: str, default: int | None = None) -> int:
@@ -18,19 +18,25 @@ def ask_input_int(prompt: str, default: int | None = None) -> int:
     except ValueError:
         raise
 
-def normalize_output_path(name: str | Path, default_dir: Path, default_name: str) -> Path:
+def normalize_output_path(name: str | Path, default_dir: Path, default_name: str, force_ext: str | None = None) -> Path:
     """
-    Retourne un Path complet :
-    - si name vide -> default_dir/default_name
-    - si name donné et contient dossier -> Path(name)
-    - si name donné uniquement comme nom de fichier -> default_dir / name
+    - Si name vide -> default_dir/default_name
+    - Si name contient dossier -> Path(name)
+    - Si name donné comme nom simple -> default_dir/name
+    - Si force_ext fourni, s'assure que le Path a cette extension (ex: '.txt')
     """
-    if not name:
-        return default_dir / default_name
-    p = Path(name)
-    if p.parent == Path("."):
-        return default_dir / p.name
-    return p
+    p = Path(name) if name else None
+    if not p:
+        res = default_dir / default_name
+    else:
+        if p.parent == Path("."):
+            res = default_dir / p.name
+        else:
+            res = p
+    if force_ext:
+        if res.suffix.lower() != force_ext.lower():
+            res = res.with_suffix(force_ext)
+    return res
 
 def cli():
     print("=== Amazing Mazes (POO) ===")
@@ -159,12 +165,17 @@ def cli():
         out_raw = input("Fichier image sortie (.png) ? (ENTER pour data/outputs/images/maze.png) ").strip()
         cell_size_raw = input("Taille cellule en pixels (ENTER=10) ? ").strip()
 
+        # Résolution du fichier source via utilitaire (cherche mazes/solutions)
+        src_path = None
         if not src_raw:
-            src_path = MAZES_DIR / "maze_5.txt"
+            src_path = str(MAZES_DIR / "maze_5.txt")
         else:
-            src_path = Path(src_raw)
-            if src_path.parent == Path("."):
-                src_path = MAZES_DIR / src_path.name
+            resolved = resolve_maze_file(src_raw)
+            if resolved is None:
+                print(f"⚠️ Fichier '{src_raw}' non trouvé dans {MAZES_DIR} ni dans {SOLUTIONS_DIR}.")
+                print("    → Vérifie le nom, ou génère/solve d'abord le labyrinthe.")
+                return
+            src_path = resolved
 
         out_path = normalize_output_path(out_raw, IMAGES_DIR, "maze.png")
         try:
@@ -187,6 +198,7 @@ def cli():
             return
         print(f"✅ Image exportée: {saved}")
         return
+
 
     if choice == "q":
         print("Au revoir 👋")

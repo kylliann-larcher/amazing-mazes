@@ -1,35 +1,30 @@
-# Fonctions utilitaires (I/O fichiers, affichage ASCII)
+# src/utils.py
 from __future__ import annotations
 from typing import List
-import os
 from pathlib import Path
-from config import MAZES_DIR
+from config import MAZES_DIR, SOLUTIONS_DIR
+
 
 class Maze:
     """
-    Représente un labyrinthe ASCII :
-      - '#' = mur
-      - '.' = couloir
-      - 'o' = chemin solution
-      - '*' = exploré mais non retenu
-    Taille logique n => grille ASCII (2*n+1) x (2*n+1)
-    Entrée = (0,1), Sortie = (2*n, 2*n-1)
+    Représentation ASCII d’un labyrinthe.
+    Chaque cellule est un caractère dans une matrice (list[list[str]]).
     """
+
     def __init__(self, grid: List[List[str]]):
         self.grid = grid
 
     @classmethod
     def empty_from_n(cls, n: int) -> "Maze":
+        """
+        Construit une grille vide de taille (2n+1)x(2n+1) pleine de murs '#'
+        et avec des cellules '.' aux positions impaires.
+        """
         H = W = 2 * n + 1
         grid = [["#" for _ in range(W)] for _ in range(H)]
-        # Place les cellules (couloirs) aux coordonnées impaires
-        for r in range(n):
-            for c in range(n):
-                ar, ac = 2 * r + 1, 2 * c + 1
-                grid[ar][ac] = "."
-        # Entrée/Sortie
-        grid[0][1] = "."
-        grid[2 * n][2 * n - 1] = "."
+        for r in range(1, H, 2):
+            for c in range(1, W, 2):
+                grid[r][c] = "."
         return cls(grid)
 
     @property
@@ -40,21 +35,27 @@ class Maze:
     def ascii_width(self) -> int:
         return len(self.grid[0]) if self.grid else 0
 
+    def copy(self) -> "Maze":
+        return Maze([row[:] for row in self.grid])
+
     def save_txt(self, filename: str | None = None) -> str:
         """
-        Sauvegarde la grille en .txt.
-        Si filename est None ou vide, on crée un fichier dans data/outputs/mazes.
-        Retourne le chemin complet du fichier sauvegardé (string).
+        Sauvegarde la grille dans un fichier .txt.
+        - Si filename est None ou vide : data/outputs/mazes/maze_auto.txt
+        - Si filename est juste un nom (sans dossier), on le place dans data/outputs/mazes
+        Retourne le chemin complet du fichier sauvegardé.
         """
-        # filename par défaut
         if not filename:
             filename = MAZES_DIR / "maze_auto.txt"
-        filename = Path(filename)
-        # si le chemin est relatif et n'a pas de dossier, l'interpréter dans MAZES_DIR
-        if filename.parent == Path("."):
-            filename = MAZES_DIR / filename.name
+        else:
+            filename = Path(filename)
+            if filename.parent == Path("."):
+                filename = MAZES_DIR / filename.name
 
-        # créer dossier parent si besoin
+        # forcer extension .txt si absente
+        if filename.suffix.lower() != ".txt":
+            filename = filename.with_suffix(".txt")
+
         filename.parent.mkdir(parents=True, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             for row in self.grid:
@@ -62,19 +63,100 @@ class Maze:
         return str(filename)
 
     @classmethod
-    
     def load_txt(cls, filename: str) -> "Maze":
+        """
+        Charge un fichier .txt représentant un labyrinthe.
+        - accepte chemin absolu/relatif complet
+        - accepte un nom simple cherché dans data/outputs/mazes puis data/outputs/solutions
+        - accepte fichiers sans extension si présents
+        """
         path = Path(filename)
-        # accepter les chemins simples (nom de fichier) en cherchant dans MAZES_DIR
-        if not path.exists():
-            alt = MAZES_DIR / path.name
-            if alt.exists():
-                path = alt
-        if not path.exists():
-            raise FileNotFoundError(f"Fichier introuvable: {filename}")
-        with open(path, "r", encoding="utf-8") as f:
+
+        # cas 1 : existe tel quel
+        if path.exists():
+            real = path
+        else:
+            # préparer variantes de noms (avec et sans .txt)
+            names_to_try = [path.name] if path.suffix else [
+                path.with_suffix(".txt").name,
+                path.name,
+            ]
+
+            found = None
+            # chercher dans mazes
+            for nm in names_to_try:
+                cand = MAZES_DIR / nm
+                if cand.exists():
+                    found = cand
+                    break
+            # chercher dans solutions
+            if not found:
+                for nm in names_to_try:
+                    cand = SOLUTIONS_DIR / nm
+                    if cand.exists():
+                        found = cand
+                        break
+            # chercher dans cwd
+            if not found:
+                for nm in names_to_try:
+                    cand = Path.cwd() / nm
+                    if cand.exists():
+                        found = cand
+                        break
+
+            if not found:
+                raise FileNotFoundError(
+                    f"Fichier introuvable: {filename}. "
+                    f"Cherché dans {MAZES_DIR} et {SOLUTIONS_DIR}."
+                )
+            real = found
+
+        with open(real, "r", encoding="utf-8") as f:
             lines = [list(line.rstrip("\n")) for line in f]
         return cls(lines)
 
-    def copy(self) -> "Maze":
-        return Maze([row[:] for row in self.grid])
+
+# ----------------------------------------------------------------------
+# Utilitaire pour résoudre un nom de fichier (maze ou solution)
+# ----------------------------------------------------------------------
+def resolve_maze_file(name: str | None) -> str | None:
+    """
+    Résout un nom de fichier donné en recherchant dans MAZES_DIR puis SOLUTIONS_DIR.
+    - accepte 'maze_30' ou 'maze_30.txt' ou un chemin absolu/relatif.
+    - accepte aussi fichiers sans extension physiquement présents (ex: 'maze_30_s').
+    - retourne le chemin complet (string) si trouvé, sinon None.
+    """
+    if not name:
+        return None
+
+    p = Path(name)
+
+    # s'il existe tel quel (avec ou sans extension)
+    if p.exists():
+        return str(p)
+
+    # variantes de noms
+    names_to_try = [p.name] if p.suffix else [
+        p.with_suffix(".txt").name,
+        p.name,
+    ]
+
+    # chercher dans mazes
+    for nm in names_to_try:
+        cand = MAZES_DIR / nm
+        if cand.exists():
+            return str(cand)
+
+    # chercher dans solutions
+    for nm in names_to_try:
+        cand = SOLUTIONS_DIR / nm
+        if cand.exists():
+            return str(cand)
+
+    # chercher dans cwd
+    for nm in names_to_try:
+        cand = Path.cwd() / nm
+        if cand.exists():
+            return str(cand)
+
+    return None
