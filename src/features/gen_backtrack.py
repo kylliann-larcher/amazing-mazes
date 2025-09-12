@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 from typing import Tuple, List
 from utils import Maze
+import sys
+sys.setrecursionlimit(10000)  # ou 20000 selon la taille ; attention aux risques
 
 Cell = Tuple[int, int]
 

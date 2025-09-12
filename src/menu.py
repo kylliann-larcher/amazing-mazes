@@ -193,26 +193,37 @@ def handle_export_image():
 
 
 # Main loop -----------------------------------------------------------------
+# Main loop (remplacer l'ancienne fonction run par celle-ci)
 def run():
-    """Lance la boucle interactive (une seule action puis exit)."""
-    print("=== Amazing Mazes (POO) ===")
-    print("1) Générer un labyrinthe (Backtracking / Kruskal)")
-    print("2) Résoudre un labyrinthe (Backtracking)")
-    print("3) Résoudre un labyrinthe (A*)")
-    print("4) Exporter ASCII -> PNG")
-    print("q) Quitter")
-    choice = input("Votre choix ? [1/2/3/4/q] ").strip().lower()
+    """Boucle interactive : affiche le menu, exécute l'action demandée, revient au menu."""
+    try:
+        while True:
+            print("\n=== Amazing Mazes (POO) ===")
+            print("1) Générer un labyrinthe (Backtracking / Kruskal)")
+            print("2) Résoudre un labyrinthe (Backtracking)")
+            print("3) Résoudre un labyrinthe (A*)")
+            print("4) Exporter ASCII -> PNG")
+            print("q) Quitter")
+            choice = input("Votre choix ? [1/2/3/4/q] ").strip().lower()
 
-    if choice == "1":
-        handle_generate()
-    elif choice == "2":
-        handle_solve_backtrack()
-    elif choice == "3":
-        handle_solve_astar()
-    elif choice == "4":
-        handle_export_image()
-    elif choice == "q":
-        print("Au revoir 👋")
-        sys.exit(0)
-    else:
-        print("Choix invalide.")
+            if choice == "1":
+                handle_generate()
+            elif choice == "2":
+                handle_solve_backtrack()
+            elif choice == "3":
+                handle_solve_astar()
+            elif choice == "4":
+                handle_export_image()
+            elif choice == "q":
+                print("Au revoir 👋")
+                break
+            else:
+                print("Choix invalide. Réessaie.")
+
+    except KeyboardInterrupt:
+        # Ctrl+C friendly exit
+        print("\nInterrompu par l'utilisateur. Au revoir 👋")
+    except Exception as e:
+        # On attrape les erreurs non prévues pour ne pas quitter sans explication
+        print(f"\nUne erreur inattendue est survenue : {e}")
+        print("Tu peux relancer le programme. Si l'erreur persiste, copie-colle le message ici.")

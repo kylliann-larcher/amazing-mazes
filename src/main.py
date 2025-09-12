@@ -1,4 +1,5 @@
-# src/main.py
+
+
 try:
     # when executed as module: python -m src.main
     from .menu import run
