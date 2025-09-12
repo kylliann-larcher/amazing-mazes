@@ -7,4 +7,5 @@ pillow>=10.0   # pour exporter les images PNG
 pytest>=7.4
 ruff>=0.4
 black>=24.4
-pillow-simd>=10.0  # version optimisée de Pillow
+pillow>=10.0  # version optimisée de Pillow
+psutil>=5.9  # pour les benchmarks
