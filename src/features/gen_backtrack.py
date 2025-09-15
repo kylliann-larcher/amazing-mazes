@@ -1,37 +1,35 @@
-# Générateur de labyrinthe avec Backtracking
+# src/features/gen_backtrack.py
 from __future__ import annotations
 import random
-from typing import Tuple, List
+from typing import List, Tuple, Callable, Optional
 from utils import Maze
-import sys
-sys.setrecursionlimit(10000)  # ou 20000 selon la taille ; attention aux risques
 
 Cell = Tuple[int, int]
+OnStep = Optional[Callable[[List[List[str]]], None]]
 
 def _neighbors(cell: Cell, n: int) -> List[Cell]:
     r, c = cell
-    cand = []
-    if r > 0:       cand.append((r - 1, c))
-    if r < n - 1:   cand.append((r + 1, c))
-    if c > 0:       cand.append((r, c - 1))
-    if c < n - 1:   cand.append((r, c + 1))
-    random.shuffle(cand)
-    return cand
+    neigh = []
+    if r > 0: neigh.append((r - 1, c))
+    if r < n - 1: neigh.append((r + 1, c))
+    if c > 0: neigh.append((r, c - 1))
+    if c < n - 1: neigh.append((r, c + 1))
+    random.shuffle(neigh)
+    return neigh
 
 def _to_ascii(cell: Cell) -> Cell:
     r, c = cell
     return 2 * r + 1, 2 * c + 1
 
 class BacktrackingGenerator:
-    """Génère un labyrinthe parfait par DFS backtracking."""
-
+    """DFS backtracking itératif (pile) — avec callback on_step facultatif."""
     def __init__(self, n: int, seed: int | None = None):
         if n < 1:
             raise ValueError("n doit être >= 1")
         self.n = n
         self.seed = seed
 
-    def generate(self) -> Maze:
+    def generate(self, on_step: OnStep = None) -> Maze:
         if self.seed is not None:
             random.seed(self.seed)
 
@@ -39,15 +37,27 @@ class BacktrackingGenerator:
         maze = Maze.empty_from_n(n)
         visited = [[False] * n for _ in range(n)]
 
-        def carve(curr: Cell):
-            visited[curr[0]][curr[1]] = True
-            for nb in _neighbors(curr, n):
-                if not visited[nb[0]][nb[1]]:
-                    cr, cc = _to_ascii(curr)
-                    nr, nc = _to_ascii(nb)
-                    wall_r, wall_c = (cr + nr) // 2, (cc + nc) // 2
-                    maze.grid[wall_r][wall_c] = "."
-                    carve(nb)
+        start = (0, 0)
+        stack: List[Cell] = [start]
+        visited[start[0]][start[1]] = True
 
-        carve((0, 0))
+        while stack:
+            curr = stack[-1]
+            unvisited = [nb for nb in _neighbors(curr, n) if not visited[nb[0]][nb[1]]]
+            if unvisited:
+                nb = unvisited[0]
+                cr, cc = _to_ascii(curr)
+                nr, nc = _to_ascii(nb)
+                wall_r = (cr + nr) // 2
+                wall_c = (cc + nc) // 2
+                maze.grid[wall_r][wall_c] = "."
+                if on_step: on_step(maze.grid)  # <-- callback visuel
+                visited[nb[0]][nb[1]] = True
+                stack.append(nb)
+            else:
+                stack.pop()
+
+        maze.grid[0][1] = "."
+        maze.grid[2 * n][2 * n - 1] = "."
+        if on_step: on_step(maze.grid)
         return maze
