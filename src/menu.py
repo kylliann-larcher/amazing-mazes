@@ -5,7 +5,7 @@ import sys
 
 # --- Imports projet (tous en haut) ---
 from config import MAZES_DIR, SOLUTIONS_DIR, IMAGES_DIR
-from utils import Maze, resolve_maze_file
+from utils import Maze, resolve_maze_file, measure_perf
 from features.gen_backtrack import BacktrackingGenerator
 from features.gen_kruskal import KruskalGenerator
 from features.solve_backtrack import BacktrackingSolver
@@ -72,10 +72,12 @@ def handle_generate():
 
     try:
         if algo == "2":
-            maze = KruskalGenerator(n).generate()
+            with measure_perf("Génération (Kruskal)"):
+                maze = KruskalGenerator(n).generate()
             algo_name = "Kruskal"
         else:
-            maze = BacktrackingGenerator(n).generate()
+            with measure_perf("Génération (Backtracking)"):
+                maze = BacktrackingGenerator(n).generate()
             algo_name = "Backtracking"
     except Exception as e:
         print(f"Erreur lors de la génération : {e}")
@@ -110,7 +112,8 @@ def handle_solve_backtrack():
         return
 
     solver = BacktrackingSolver()
-    solved = solver.solve(maze)
+    with measure_perf("Résolution (Backtracking)"):
+        solved = solver.solve(maze)
 
     try:
         saved = solved.save_txt(str(out_path))
@@ -141,7 +144,8 @@ def handle_solve_astar():
         return
 
     solver = AStarSolver()
-    solved = solver.solve(maze)
+    with measure_perf("Résolution (A*)"):
+        solved = solver.solve(maze)
 
     try:
         saved = solved.save_txt(str(out_path))

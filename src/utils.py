@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import List
 from pathlib import Path
 from config import MAZES_DIR, SOLUTIONS_DIR
-
+import time, tracemalloc
+from contextlib import contextmanager
 
 class Maze:
     """
@@ -160,3 +161,24 @@ def resolve_maze_file(name: str | None) -> str | None:
             return str(cand)
 
     return None
+
+
+@contextmanager
+def measure_perf(label: str = "Opération"):
+    """
+    Mesure le temps et la mémoire consommée pendant un bloc.
+    Utilisation:
+        with measure_perf("Génération"):
+            ... code ...
+    """
+    tracemalloc.start()
+    t0 = time.perf_counter()
+    try:
+        yield
+    finally:
+        t1 = time.perf_counter()
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        elapsed = (t1 - t0) * 1000  # ms
+        print(f"⏱️ {label} terminé en {elapsed:.2f} ms | Mémoire peak: {peak/1024:.1f} KB")
+
