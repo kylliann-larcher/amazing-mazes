@@ -1,27 +1,21 @@
 r"""
-scripts/internal_bench.py
-
 Benchmark interne des ALGO EXISTANTS (aucun nouveau fichier d'algo) :
 - Générateurs : Backtracking, Kruskal
 - Solveurs    : Backtracking (récursif si ton fichier l'est), A*
 - Mesures : temps (ns), mémoire (tracemalloc + optionnel psutil RSS)
 - Résilience : capture RecursionError / autres exceptions -> pas de crash
-- Paramètres : --sizes ... --repeats ... --reclimit N
+- Paramètres : --min/--max (ou --sizes), --repeats, --reclimit, --verbose
 
 Exemples (PowerShell) :
   .venv\Scripts\activate
-  python scripts\internal_bench.py --sizes 10 30 50 75 100 150 200 --repeats 5 --reclimit 1000
+  python scripts\internal_bench.py --min 1 --max 200 --repeats 5 --reclimit 5000 --verbose --out data/outputs/internal_bench_1_200_r5.csv
 """
-
-# === rendre 'src/' importable ===
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
-# ================================
-
 import time
 import tracemalloc
 import csv
@@ -44,7 +38,6 @@ from utils import Maze
 
 OUT_CSV = Path("data/outputs/internal_bench.csv")
 OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-
 
 # -----------------------
 # Mesures
@@ -153,7 +146,7 @@ def solve_astar_run(maze: Maze) -> Maze:
 # -----------------------
 # Orchestration
 # -----------------------
-def run_one(size: int, seed: int, repeats: int):
+def run_one(size: int, seed: int, repeats: int, verbose: bool = False):
     """
     Pour une taille donnée :
       - Génère via Backtracking et Kruskal (repeats fois)
@@ -169,6 +162,8 @@ def run_one(size: int, seed: int, repeats: int):
         ("kruskal",   "Kruskal",     gen_kruskal_run),
     ]:
         for r in range(repeats):
+            if verbose:
+                print(f"  [n={size} r={r+1}] Génération {gen_name} ...")
             m = measure_fn(lambda: gen_fn(size, seed + r))
             maze = m["result"] if m["ok"] else None
             metrics = extract_maze_metrics(maze)
@@ -181,17 +176,16 @@ def run_one(size: int, seed: int, repeats: int):
                 **metrics,
             })
             if gen_key == "backtrack" and maze is not None:
-                last_bt_maze = maze  # on utilisera ce maze pour les solveurs
-
-    # Si aucun labyrinthe Backtracking n'a été généré avec succès, on en génère un via Kruskal pour résoudre
+                last_bt_maze = maze  
     if last_bt_maze is None:
-        # tente un unique Kruskal pour fournir une instance de résolution
         mk = measure_fn(lambda: gen_kruskal_run(size, seed))
         last_bt_maze = mk["result"] if mk["ok"] else None
 
     # ----- Solveurs -----
     for solver_name, solver_fn in [("Backtracking", solve_backtrack_run), ("AStar", solve_astar_run)]:
         for r in range(repeats):
+            if verbose:
+                print(f"  [n={size} r={r+1}] Résolution {solver_name} ...")
             if last_bt_maze is None:
                 m = {"ok": 0, "error": "NoMazeToSolve", "time_ns": 0,
                      "tracemalloc_peak_bytes": 0, "rss_delta_bytes": None, "result": None}
@@ -218,13 +212,18 @@ def run_one(size: int, seed: int, repeats: int):
 # -----------------------
 def parse_args():
     p = argparse.ArgumentParser(description="Internal benchmark for amazing-mazes (existing algos only)")
+    # soit --sizes explicites...
     p.add_argument("--sizes", nargs="+", type=int,
-                   default=[10, 20, 30, 50, 75, 100, 150, 200],
-                   help="Sizes n to test (n x n)")
-    p.add_argument("--repeats", type=int, default=10, help="Repeats per test")
+                   help="Explicit sizes n to test (n x n). If omitted, uses --min..--max.")
+    # ... soit un intervalle continu
+    p.add_argument("--min", type=int, default=1, help="Min size n (inclusive) if --sizes not provided")
+    p.add_argument("--max", type=int, default=200, help="Max size n (inclusive) if --sizes not provided")
+
+    p.add_argument("--repeats", type=int, default=5, help="Repeats per test (default 5)")
     p.add_argument("--seed", type=int, default=1, help="Seed for RNG (base, increment per repeat)")
     p.add_argument("--reclimit", type=int, default=1000, help="sys.setrecursionlimit value")
     p.add_argument("--out", type=str, default=str(OUT_CSV), help="Output CSV path")
+    p.add_argument("--verbose", action="store_true", help="Print detailed progress")
     return p.parse_args()
 
 def main():
@@ -232,10 +231,14 @@ def main():
     # Fixe la limite de récursion pour les ALGO récursifs existants (ex: BacktrackingSolver)
     sys.setrecursionlimit(args.reclimit)
 
+    # Construire la liste des tailles
+    sizes = args.sizes if args.sizes else list(range(args.min, args.max + 1))
+
     all_rows = []
-    for n in args.sizes:
-        print(f"Running size={n} (repeats={args.repeats}) ...")
-        rows = run_one(n, args.seed, args.repeats)
+    for n in sizes:
+        if args.verbose:
+            print(f"Running size={n} (repeats={args.repeats}) ...")
+        rows = run_one(n, args.seed, args.repeats, verbose=args.verbose)
         all_rows.extend(rows)
 
     # write CSV

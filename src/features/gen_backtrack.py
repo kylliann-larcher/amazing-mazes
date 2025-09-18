@@ -1,4 +1,3 @@
-# src/features/gen_backtrack.py
 from __future__ import annotations
 import random
 from typing import List, Tuple, Callable, Optional
