@@ -1,0 +1,11 @@
+# Dépendances Python du projet
+# Core
+numpy>=1.25
+pillow>=10.0   # pour exporter les images PNG
+
+# Tests et qualité
+pytest>=7.4
+ruff>=0.4
+black>=24.4
+pillow>=10.0  # version optimisée de Pillow
+psutil>=5.9  # pour les benchmarks
