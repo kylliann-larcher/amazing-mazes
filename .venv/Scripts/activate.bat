@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set "VIRTUAL_ENV=C:\Users\kylli\Desktop\amazing-mazes\.venv"
+set "VIRTUAL_ENV=C:\Users\kylli\Desktop\La_plateforme\B2\amazing-mazes\.venv"
 
 if not defined PROMPT set PROMPT=$P$G
 
