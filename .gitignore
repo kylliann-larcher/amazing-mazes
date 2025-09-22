@@ -12,6 +12,7 @@ __pycache__/
 .venv/
 env/
 venv/
+.venv
 
 # Données
 data/outputs/*
