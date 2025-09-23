@@ -23,13 +23,11 @@ import statistics
 import argparse
 import gc
 
-# Optional psutil for RSS memory measurements
 try:
     import psutil
 except Exception:
     psutil = None
 
-# Import des ALGO EXISTANTS
 from features.gen_backtrack import BacktrackingGenerator
 from features.gen_kruskal import KruskalGenerator
 from features.solve_backtrack import BacktrackingSolver
@@ -43,49 +41,31 @@ OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
 # Mesures
 # -----------------------
 def measure_fn(fn):
-    """
-    Mesure : temps (ns), tracemalloc peak (bytes), optional RSS delta (bytes).
-    Retourne dict incluant 'ok' et 'error' (None si OK).
-    """
+    import time, tracemalloc, gc
     gc.collect()
     tracemalloc.start()
-    if psutil:
-        proc = psutil.Process()
-        rss_before = proc.memory_info().rss
-    else:
-        rss_before = None
-
-    ok = 1
-    err = None
-    result = None
 
     t0 = time.perf_counter_ns()
+    ok, err, result = 1, None, None
     try:
         result = fn()
     except RecursionError:
-        ok = 0
-        err = "RecursionError"
+        ok, err = 0, "RecursionError"
     except Exception as e:
-        ok = 0
-        err = f"{type(e).__name__}: {e}"
+        ok, err = 0, f"{type(e).__name__}: {e}"
     t1 = time.perf_counter_ns()
 
-    if psutil:
-        rss_after = proc.memory_info().rss
-        rss_delta = rss_after - rss_before
-    else:
-        rss_delta = None
-
+    # même si exception, on récupère le pic alloc Python
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
     return {
         "result": result,
         "ok": ok,
-        "error": err,
-        "time_ns": int(t1 - t0),
+        "error": err,                       # None si OK, sinon message clair
+        "time_ns": int(t1 - t0),            # temps haute résolution
         "tracemalloc_peak_bytes": int(peak),
-        "rss_delta_bytes": int(rss_delta) if rss_delta is not None else None,
+        "rss_delta_bytes": None,            # pas de psutil ici
     }
 
 
@@ -136,7 +116,6 @@ def gen_kruskal_run(n: int, seed: int | None = None) -> Maze:
     return KruskalGenerator(n, seed=seed).generate()
 
 def solve_backtrack_run(maze: Maze) -> Maze:
-    # ⚠️ si ton BacktrackingSolver est récursif, il pourra lever RecursionError
     return BacktrackingSolver().solve(maze)
 
 def solve_astar_run(maze: Maze) -> Maze:
@@ -149,14 +128,18 @@ def solve_astar_run(maze: Maze) -> Maze:
 def run_one(size: int, seed: int, repeats: int, verbose: bool = False):
     """
     Pour une taille donnée :
-      - Génère via Backtracking et Kruskal (repeats fois)
-      - Résout le DERNIER labyrinthe généré par Backtracking via BacktrackingSolver & A* (repeats fois)
+      - Génère 'repeats' mazes via Backtracking ET 'repeats' mazes via Kruskal
+      - Résout chaque maze généré (de chaque source) avec BacktrackingSolver & A*
     Renvoie une liste de lignes (dict) pour CSV.
     """
     rows = []
 
-    # ----- Générateurs -----
-    last_bt_maze = None
+    # ----- Génération : on collecte TOUTES les instances pour chaque générateur -----
+    gen_sets = {
+        "Backtracking": [],  # liste de Maze (ou None si fail)
+        "Kruskal": []
+    }
+
     for gen_key, gen_name, gen_fn in [
         ("backtrack", "Backtracking", gen_backtrack_run),
         ("kruskal",   "Kruskal",     gen_kruskal_run),
@@ -167,44 +150,58 @@ def run_one(size: int, seed: int, repeats: int, verbose: bool = False):
             m = measure_fn(lambda: gen_fn(size, seed + r))
             maze = m["result"] if m["ok"] else None
             metrics = extract_maze_metrics(maze)
+
+            # Ligne "generator"
             rows.append({
                 "size": size, "seed": seed + r, "role": "generator", "algo": gen_name,
                 "repeat": r + 1, "ok": m["ok"], "error": m["error"],
                 "time_ns": m["time_ns"],
                 "tracemalloc_peak_bytes": m["tracemalloc_peak_bytes"],
                 "rss_delta_bytes": m["rss_delta_bytes"],
+                # Pour les lignes générateurs, on peut renseigner gen_source=algo pour cohérence/filtrage
+                "gen_source": gen_name,
                 **metrics,
             })
-            if gen_key == "backtrack" and maze is not None:
-                last_bt_maze = maze  
-    if last_bt_maze is None:
-        mk = measure_fn(lambda: gen_kruskal_run(size, seed))
-        last_bt_maze = mk["result"] if mk["ok"] else None
 
-    # ----- Solveurs -----
-    for solver_name, solver_fn in [("Backtracking", solve_backtrack_run), ("AStar", solve_astar_run)]:
-        for r in range(repeats):
+            gen_sets[gen_name].append(maze if m["ok"] else None)
+
+    # ----- Résolution : pour chaque source de génération, chaque solveur, chaque run -----
+    for gen_source_name, maze_list in gen_sets.items():
+        # S'il n'y a aucune instance OK dans cette source, on passe (rien à résoudre)
+        any_ok = any(mz is not None for mz in maze_list)
+        if not any_ok:
             if verbose:
-                print(f"  [n={size} r={r+1}] Résolution {solver_name} ...")
-            if last_bt_maze is None:
-                m = {"ok": 0, "error": "NoMazeToSolve", "time_ns": 0,
-                     "tracemalloc_peak_bytes": 0, "rss_delta_bytes": None, "result": None}
-                metrics = extract_maze_metrics(None)
-            else:
-                # important: .copy() pour ne pas réutiliser une grille déjà marquée
-                m = measure_fn(lambda: solver_fn(last_bt_maze.copy()))
-                metrics = extract_maze_metrics(m["result"] if m["ok"] else None)
+                print(f"  [n={size}] Pas de maze valide pour gen_source={gen_source_name} -> skip solveurs.")
+            continue
 
-            rows.append({
-                "size": size, "seed": seed + r, "role": "solver", "algo": solver_name,
-                "repeat": r + 1, "ok": m["ok"], "error": m["error"],
-                "time_ns": m["time_ns"],
-                "tracemalloc_peak_bytes": m["tracemalloc_peak_bytes"],
-                "rss_delta_bytes": m["rss_delta_bytes"],
-                **metrics,
-            })
+        for solver_name, solver_fn in [("Backtracking", solve_backtrack_run), ("AStar", solve_astar_run)]:
+            for r in range(repeats):
+                if verbose:
+                    print(f"  [n={size} r={r+1}] Résolution {solver_name} sur gen_source={gen_source_name} ...")
+
+                base_maze = maze_list[r] if r < len(maze_list) else None
+                if base_maze is None:
+                    # run de génération a échoué → ligne solver en échec explicite
+                    m = {"ok": 0, "error": "NoMazeToSolve", "time_ns": 0,
+                         "tracemalloc_peak_bytes": 0, "rss_delta_bytes": None, "result": None}
+                    metrics = extract_maze_metrics(None)
+                else:
+                    # important: .copy() pour ne pas réutiliser une grille déjà marquée
+                    m = measure_fn(lambda: solver_fn(base_maze.copy()))
+                    metrics = extract_maze_metrics(m["result"] if m["ok"] else None)
+
+                rows.append({
+                    "size": size, "seed": seed + r, "role": "solver", "algo": solver_name,
+                    "repeat": r + 1, "ok": m["ok"], "error": m["error"],
+                    "time_ns": m["time_ns"],
+                    "tracemalloc_peak_bytes": m["tracemalloc_peak_bytes"],
+                    "rss_delta_bytes": m["rss_delta_bytes"],
+                    "gen_source": gen_source_name,   # <- NOUVELLE COLONNE CLEF
+                    **metrics,
+                })
 
     return rows
+
 
 
 # -----------------------
@@ -246,7 +243,8 @@ def main():
         "size","seed","role","algo","repeat","ok","error",
         "time_ns","tracemalloc_peak_bytes","rss_delta_bytes",
         "ascii_h","ascii_w","wall_count","corridor_count",
-        "path_length","explored_count","visited_count","other_count"
+        "path_length","explored_count","visited_count","other_count",
+        "gen_source"
     ]
     outp = Path(args.out)
     outp.parent.mkdir(parents=True, exist_ok=True)
